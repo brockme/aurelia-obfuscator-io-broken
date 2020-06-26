@@ -1,7 +1,7 @@
 # aurelia-obfuscator-io-broken
 Reproducing bug where Aurelia project build is broken when webpack-obfuscator is utilized.
 
-To run, may need to install the aurelia-cli globally (details here: https://aurelia.io/docs/cli/basics#machine-setup):
+To run, you may need to install the aurelia-cli globally (details here: https://aurelia.io/docs/cli/basics#machine-setup):
 ```
 npm install aurelia-cli -g
 ```
