@@ -1,47 +1,52 @@
-import { NPM } from 'aurelia-cli';
-import kill from 'tree-kill';
-import { platform } from '../aurelia.json';
+import {config} from './build';
+import configureEnvironment from './environment';
+import webpack from 'webpack';
+import Server from 'webpack-dev-server';
+import project from '../aurelia.json';
+import {CLIOptions, reportWebpackReadiness} from 'aurelia-cli';
+import gulp from 'gulp';
 
-const npm =  new NPM();
-
-function run() {
-  console.log('`au run` is an alias of the `npm start`, you may use either of those; see README for more details.');
-  const args = process.argv.slice(3);
-  return npm.run('start', ['--', ... cleanArgs(args)]);
-}
-
-// Cleanup --env prod to --env.production
-// for backwards compatibility
-function cleanArgs(args) {
-  let host;
-  const cleaned = [];
-
-  for (let i = 0, ii = args.length; i < ii; i++) {
-    if (args[i] === '--env' && i < ii - 1) {
-      const env = args[++i].toLowerCase();
-      if (env.startsWith('prod')) {
-        cleaned.push('--env.production');
-      } else if (env.startsWith('test')) {
-        cleaned.push('--tests');
-      }
-    } else if (args[i] === '--host' && i < ii -1) {
-      host = args[++i];
-    } else {
-      cleaned.push(args[i]);
+function runWebpack(done) {
+  // https://webpack.github.io/docs/webpack-dev-server.html
+  let opts = {
+    host: 'localhost',
+    publicPath: config.output.publicPath,
+    filename: config.output.filename,
+    hot: project.platform.hmr || CLIOptions.hasFlag('hmr'),
+    port: project.platform.port,
+    contentBase: config.output.path,
+    historyApiFallback: true,
+    open: project.platform.open,
+    stats: {
+      colors: require('supports-color')
     }
+  };
+
+  // Add the webpack-dev-server client to the webpack entry point
+  // The path for the client to use such as `webpack-dev-server/client?http://${opts.host}:${opts.port}/` is not required
+  // The path used is derived from window.location in the browser and output.publicPath in the webpack.config.
+  if (project.platform.hmr || CLIOptions.hasFlag('hmr')) {
+    config.plugins.push(new webpack.HotModuleReplacementPlugin());
+    config.entry.app.unshift('webpack-dev-server/client', 'webpack/hot/dev-server');
+  } else {
+    // removed "<script src="/webpack-dev-server.js"></script>" from index.ejs in favour of this method
+    config.entry.app.unshift('webpack-dev-server/client');
   }
 
-  // Deal with --host before webpack-dev-server calls webpack config.
-  // Because of https://discourse.aurelia.io/t/changing-platform-host-in-aurelia-json-doesnt-change-the-host-ip/3043/10?u=huochunpeng
-  if (!host) host = platform.host;
-  if (host) cleaned.push('--host', host);
-  return cleaned;
+  const compiler = webpack(config);
+  let server = new Server(compiler, opts);
+
+  server.listen(opts.port, opts.host, function(err) {
+    if (err) throw err;
+
+    reportWebpackReadiness(opts);
+    done();
+  });
 }
 
-const shutdownAppServer = () => {
-  if (npm && npm.proc) {
-    kill(npm.proc.pid);
-  }
-};
+const run = gulp.series(
+  configureEnvironment,
+  runWebpack
+);
 
-export { run as default, shutdownAppServer };
+export { run as default };
